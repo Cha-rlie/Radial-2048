@@ -87,68 +87,168 @@ class MyGameState extends ChangeNotifier {
   void doMove(Move movement) {
     lastMove = List.from(grid);
     switch (movement) {
-      case Move.antiClockwise:
-        // Repeat this for all of the rows
-        for (var i = 0; i < 4; i++) {
-          // Keep track of the next spot to fill
-          var nextPos = 3;
-          for (var j = 3; j > -1; j--) { // Loop through the cells in the row
-            if (grid[i][j] != 0) { // If the cell is not empty
-              // If the next cell exists and is equal to this one
-              if (j > 0 && grid[i][j-1] == grid[j][i]) {
-                int newValue = grid[i][j]*2;
-                grid[i][nextPos] = newValue;
-                grid[i][j-1] = 0;
-                empty.add([i, j-1]);
-                if (newValue > maxNum) maxNum = newValue;
-              }
-              else {
-                grid[i][nextPos] = grid[i][j];
-              }
-              // Clear the cells if something has been moved
-              if (nextPos != j) {
-                grid[i][j] = 0;
-                empty.add([i, j]);
-                empty.remove([i, nextPos]);
-              }
-              // ^ Fill up the next position cell as required
-              nextPos -= 1; // Increment the next available position
-            }
-          }
-        }
-        break;
       case Move.clockwise:
-        // Repeat this for all of the rows
-        for (var i = 0; i < 4; i++) {
-          // Keep track of the next spot to fill
-          var nextPos = 0;
-          for (var j = 0; j < 4; j++) { // Loop through the cells in the row
-            if (grid[i][j] != 0) { // If the cell is not empty
-              // If the next cell exists and is equal to this one
-              if (j < 3 && grid[i][j+1] == grid[j][i]) {
-                int newValue = grid[i][j]*2;
-                grid[i][nextPos] = newValue;
-                grid[i][j+1] = 0;
-                empty.add([i, j+1]);
-                if (newValue > maxNum) maxNum = newValue;
+        debugPrint("clockwise");
+        // Repeat this for all of the sectors
+        // Goes from bottom-right clockwise
+        for (var radi = 0; radi < 4; radi++) {
+          List<int> newNums = [];
+          int numToMatch = -1;
+          for (var sec = 3; sec > -1; sec--) {
+            debugPrint("wallPose for this radi ($radi) = ${wallPoses[radi]}");
+            int wallAdjustedSec = (sec + wallPoses[radi])%4;
+            debugPrint("1");
+            int currentNum = grid[radi][wallAdjustedSec];
+            debugPrint("2");
+            // If the next cell is not empty
+            debugPrint("currentNum = $currentNum");
+            debugPrint("NumToMatch = $numToMatch");
+            if (currentNum != 0) {
+              if (numToMatch == -1) {numToMatch = currentNum;}
+              else if (currentNum == numToMatch) {
+                newNums.add(currentNum*2);
+                if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
+                numToMatch = -1;
+              } else {
+                newNums.add(numToMatch);
+                numToMatch = currentNum;
               }
-              else {
-                grid[i][nextPos] = grid[i][j];
-              }
-              // Clear the cells if something has been moved
-              if (nextPos != j) {
-                grid[i][j] = 0;
-                empty.add([i, j]);
-                empty.remove([i, nextPos]);
-              }
-              // ^ Fill up the next position cell as required
-              nextPos += 1; // Increment the next available position
+            }
+          }
+          if (numToMatch != -1) {newNums.add(numToMatch);}
+          debugPrint("newNums = $newNums");
+          // Put new list in the grid
+          for (var sec = 0; sec < 4; sec++) {
+            int wallAdjustedSec = (3 - sec + wallPoses[radi])%4;
+            debugPrint("3 + sec = $sec + walladj = $wallAdjustedSec + newNums = $newNums");
+            if (sec < newNums.length) {
+              debugPrint("4");
+              grid[radi][wallAdjustedSec] = newNums[sec];
+              debugPrint("5");
+              empty.remove([radi, wallAdjustedSec]); // No error is thrown if not in list
+              debugPrint("6");
+            } else {
+              debugPrint("7");
+              grid[radi][wallAdjustedSec] = 0;
+              debugPrint("8");
+              if (!empty.contains([radi, wallAdjustedSec])) {empty.add([radi, wallAdjustedSec]);} //make unique
+              debugPrint("9");
             }
           }
         }
         break;
+
+
+        // // Repeat this for all of the rows
+        // for (var i = 0; i < 4; i++) {
+        //   // Keep track of the next spot to fill
+        //   var nextPos = 3;
+        //   for (var j = 3; j > -1; j--) { // Loop through the cells in the row
+        //     if (grid[i][j] != 0) { // If the cell is not empty
+        //       // If the next cell exists and is equal to this one
+        //       if (j > 0 && grid[i][j-1] == grid[j][i]) {
+        //         int newValue = grid[i][j]*2;
+        //         grid[i][nextPos] = newValue;
+        //         grid[i][j-1] = 0;
+        //         empty.add([i, j-1]);
+        //         if (newValue > maxNum) maxNum = newValue;
+        //       }
+        //       else {
+        //         grid[i][nextPos] = grid[i][j];
+        //       }
+        //       // Clear the cells if something has been moved
+        //       if (nextPos != j) {
+        //         grid[i][j] = 0;
+        //         empty.add([i, j]);
+        //         empty.remove([i, nextPos]);
+        //       }
+        //       // ^ Fill up the next position cell as required
+        //       nextPos -= 1; // Increment the next available position
+        //     }
+        //   }
+        // }
+        // break;
+      case Move.antiClockwise:
+        debugPrint("antiClockwise");
+        // Repeat this for all of the sectors
+        // Goes from bottom-right clockwise
+        for (var radi = 0; radi < 4; radi++) {
+          List<int> newNums = [];
+          int numToMatch = -1;
+          for (var sec = 0; sec < 4; sec++) {
+            debugPrint("wallPose for this radi ($radi) = ${wallPoses[radi]}");
+            int wallAdjustedSec = (sec + wallPoses[radi])%4;
+            debugPrint("1");
+            int currentNum = grid[radi][wallAdjustedSec];
+            debugPrint("2");
+            // If the next cell is not empty
+            debugPrint("currentNum = $currentNum");
+            debugPrint("NumToMatch = $numToMatch");
+            if (currentNum != 0) {
+              if (numToMatch == -1) {numToMatch = currentNum;}
+              else if (currentNum == numToMatch) {
+                newNums.add(currentNum*2);
+                if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
+                numToMatch = -1;
+              } else {
+                newNums.add(numToMatch);
+                numToMatch = currentNum;
+              }
+            }
+          }
+          if (numToMatch != -1) {newNums.add(numToMatch);}
+          debugPrint("newNums = $newNums");
+          // Put new list in the grid
+          for (var sec = 0; sec < 4; sec++) {
+            int wallAdjustedSec = (sec + wallPoses[radi])%4;
+            debugPrint("3 + sec = $sec + walladj = $wallAdjustedSec + newNums = $newNums");
+            if (sec < newNums.length) {
+              debugPrint("4");
+              grid[radi][wallAdjustedSec] = newNums[sec];
+              debugPrint("5");
+              empty.remove([radi, wallAdjustedSec]); // No error is thrown if not in list
+              debugPrint("6");
+            } else {
+              debugPrint("7");
+              grid[radi][wallAdjustedSec] = 0;
+              debugPrint("8");
+              if (!empty.contains([radi, wallAdjustedSec])) {empty.add([radi, wallAdjustedSec]);} //make unique
+              debugPrint("9");
+            }
+          }
+        }
+        break;
+
+        // // Repeat this for all of the rows
+        // for (var i = 0; i < 4; i++) {
+        //   // Keep track of the next spot to fill
+        //   var nextPos = 0;
+        //   for (var j = 0; j < 4; j++) { // Loop through the cells in the row
+        //     if (grid[i][j] != 0) { // If the cell is not empty
+        //       // If the next cell exists and is equal to this one
+        //       if (j < 3 && grid[i][j+1] == grid[j][i]) {
+        //         int newValue = grid[i][j]*2;
+        //         grid[i][nextPos] = newValue;
+        //         grid[i][j+1] = 0;
+        //         empty.add([i, j+1]);
+        //         if (newValue > maxNum) maxNum = newValue;
+        //       }
+        //       else {
+        //         grid[i][nextPos] = grid[i][j];
+        //       }
+        //       // Clear the cells if something has been moved
+        //       if (nextPos != j) {
+        //         grid[i][j] = 0;
+        //         empty.add([i, j]);
+        //         empty.remove([i, nextPos]);
+        //       }
+        //       // ^ Fill up the next position cell as required
+        //       nextPos += 1; // Increment the next available position
+        //     }
+        //   }
+        // }
+        // break;
       case Move.inwards:
-      // TODO: UPDATE EMPTIES!!!
         // Repeat this for all of the sectors
         // Goes from bottom-right clockwise
         for (var sec = 0; sec < 4; sec++) {
@@ -164,6 +264,7 @@ class MyGameState extends ChangeNotifier {
               if (numToMatch == -1) {numToMatch = currentNum;}
               else if (currentNum == numToMatch) {
                 newNums.add(currentNum*2);
+                if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
                 numToMatch = -1;
               } else {
                 newNums.add(numToMatch);
@@ -177,8 +278,10 @@ class MyGameState extends ChangeNotifier {
           for (var radi = 0; radi < 4; radi++) {
             if (radi < newNums.length) {
               grid[radi][sec] = newNums[radi];
+              empty.remove([radi, sec]); // No error is thrown if not in list
             } else {
               grid[radi][sec] = 0;
+              if (!empty.contains([radi, sec])) {empty.add([radi, sec]);}
             }
           }
         }
@@ -225,6 +328,7 @@ class MyGameState extends ChangeNotifier {
               if (numToMatch == -1) {numToMatch = currentNum;}
               else if (currentNum == numToMatch) {
                 newNums.add(currentNum*2);
+                if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
                 numToMatch = -1;
               } else {
                 newNums.add(numToMatch);
@@ -238,8 +342,10 @@ class MyGameState extends ChangeNotifier {
           for (var radi = 0; radi < 4; radi++) {
             if (radi < newNums.length) {
               grid[3-radi][sec] = newNums[radi];
+              empty.remove([3-radi, sec]); // No error is thrown if not in list
             } else {
               grid[3-radi][sec] = 0;
+              if (!empty.contains([radi, 3-sec])) {empty.add([3-radi, sec]);}
             }
           }
         }
@@ -287,6 +393,7 @@ class MyGameState extends ChangeNotifier {
     grid = List.from(lastMove);
     moveNum -= 1;
     undid = true;
+    shouldRepaint = true;
     notifyListeners();
   }
   
@@ -370,6 +477,9 @@ class _GamePageState extends State<GamePage> {
   late List<List<int>> grid;
   late List<int> wallPoses;
 
+  // Keep track of widget size
+  final GlobalKey myWidgetKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -392,6 +502,8 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.outwards);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.outwards); repaintNotifier.value++;});
+          var renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          StatusOverlay.show(context, icon: Icons.zoom_out_map, message: "Outwards", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height/10));
           debugPrint('Outwards');
           break;
         case LogicalKeyboardKey.arrowDown:
@@ -400,6 +512,8 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.inwards);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.inwards); repaintNotifier.value++;});
+          final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          StatusOverlay.show(context, icon: Icons.zoom_in_map, message: "Inwards", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
           debugPrint('Inwards');
           break;
         case LogicalKeyboardKey.arrowRight:
@@ -408,6 +522,8 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.clockwise);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.clockwise); repaintNotifier.value++;});
+          final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          StatusOverlay.show(context, icon: Icons.rotate_right, message: "Clockwise", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
           debugPrint('Clockwise');
           break;
         case LogicalKeyboardKey.arrowLeft:
@@ -416,6 +532,8 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.antiClockwise);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.antiClockwise); repaintNotifier.value++;});
+          final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          StatusOverlay.show(context, icon: Icons.rotate_left, message: "Anticlockwise", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
           debugPrint('Anticlockwise');
           break;
         default:
@@ -433,6 +551,7 @@ class _GamePageState extends State<GamePage> {
       autofocus: true,
       onKeyEvent: (event) => _onKeyEvent(event),
       child: Column(
+        key: myWidgetKey,
         children: [
           // TODO: add a tutorial question mark button here
           Row(
@@ -452,7 +571,7 @@ class _GamePageState extends State<GamePage> {
                 onPressed: () {
                   if (context.read<MyGameState>().moveNum > 0) {
                     if (!context.read<MyGameState>().undid) {
-                    context.read<MyGameState>().undo();
+                      context.read<MyGameState>().undo();
                     } else {
                       showDialog(context: context, barrierDismissible: true,
                         builder: (BuildContext context) {
@@ -628,11 +747,11 @@ class RadialPainter extends CustomPainter {
           double x = size.width/130 + (size.width/20+size.width/10) * (index);
           canvas.drawLine(Offset(center.width - x, center.width), Offset(center.width - x - size.width/10, center.width), wallPaint);
           break;
-        case 3:
+        case 1:
           double y = size.width/130 + (size.width/20+size.width/10) * (index);
           canvas.drawLine(Offset(center.width, center.width + y), Offset(center.width, center.width + y + size.width/10), wallPaint);
           break;
-        case 1:
+        case 3:
           double y = size.width/130 + (size.width/20+size.width/10) * (index);
           canvas.drawLine(Offset(center.width, center.width - y), Offset(center.width, center.width - y - size.width/10), wallPaint);
           break;
@@ -743,5 +862,83 @@ class ExpandedSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(child: child);
+  }
+}
+
+class StatusOverlay {
+  static OverlayEntry? _currentEntry;
+
+  static void show(
+    BuildContext context, {
+    required IconData icon,
+    required String message,
+    required Rect targetRect, // Position info of your widget
+  }) {
+    // Remove old overlay
+    _currentEntry?.remove();
+
+    final overlay = Overlay.of(context);
+
+    // Create an animation controller
+    final animationController = AnimationController(
+      vsync: overlay!, // needs TickerProvider, handled by OverlayState
+      duration: const Duration(milliseconds: 250),
+    );
+
+    final fadeAnimation = CurvedAnimation(
+      parent: animationController,
+      curve: Curves.easeOut,
+    );
+
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: targetRect.center.dy - 20, // Center vertically over widget
+        left: targetRect.center.dx - 60, // Roughly center horizontally
+        child: Material(
+          color: Colors.transparent,
+          child: FadeTransition(
+            opacity: fadeAnimation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, -0.1),
+                end: Offset.zero,
+              ).animate(fadeAnimation),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      message,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    _currentEntry = entry;
+
+    // Start animation
+    animationController.forward();
+
+    // Auto-hide
+    Future.delayed(const Duration(seconds: 2), () async {
+      await animationController.reverse();
+      entry.remove();
+      _currentEntry = null;
+    });
   }
 }
