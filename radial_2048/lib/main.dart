@@ -36,6 +36,12 @@ enum Move {
 
 class MyGameState extends ChangeNotifier {
   static var random = Random();
+
+  // Use compile-time flags to switch modes:
+  // flutter run --dart-define=USE_MOCK=false --dart-define=BACKEND_URL=http://rpi:5000
+  static const bool useMockBackend = bool.fromEnvironment('USE_MOCK', defaultValue: true);
+  static const String backendBase = String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:5000');
+
   late List<List<int>> grid;
   var empty = [];
   int maxNum = 0;
@@ -44,7 +50,7 @@ class MyGameState extends ChangeNotifier {
   int moveNum = 0;
   var undid = false;
   var shouldRepaint = false;
-  var leaderboard = [
+  List<Map<String, dynamic>> leaderboard = [
     {"Username": "Alice", "Score": 250, "Date": "2025-10-19"},
     {"Username": "Bob", "Score": 200, "Date": "2025-10-18"},
     {"Username": "Charlie", "Score": 180, "Date": "2025-10-17"},
@@ -94,6 +100,7 @@ class MyGameState extends ChangeNotifier {
       if (newValue > maxNum) maxNum = newValue;
     } else {
       gameOver = true;
+      //TODO: handle game over state
       debugPrint("GAMEOVER!");
     }
   }
@@ -427,21 +434,63 @@ class MyGameState extends ChangeNotifier {
   // send a score
   Future<void> submitScore(String username) async {
     if (username.isEmpty) username = "Anonymous";
-    final url = Uri.parse('/leaderboard'); // relative path when hosted under same domain
-    final resp = await http.post(url,
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({'username': username, 'score': score}));
-    if (resp.statusCode != 200) {
-    // handle failure (parse JSON error message)
-      debugPrint('Failed: ' + resp.body);
+    final newEntry = {"Username": username, "Score": score, "Date": DateTime.now().toIso8601String().split('T').first};
+    leaderboard.insert(0, newEntry);
+    leaderboard.sort((a,b) => (b["Score"] as int).compareTo(a["Score"] as int));
+    if (leaderboard.length > 100) {
+      leaderboard = leaderboard.sublist(0, 100);
+    }
+    notifyListeners();
+    if (useMockBackend) {
+      debugPrint('Using mock backend; submit scored locally only.');
+      return;
+    }
+
+    final url = Uri.parse('$backendBase/submit'); // match backend endpoint
+    try {
+      final resp = await http.post(url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'score': score}));
+      if (resp.statusCode != 200) {
+        debugPrint('submitScore failed (${resp.statusCode}): ${resp.body}');
+      }
+    } catch (e) {
+      debugPrint('submitScore exception: $e');
+      // keep optimistic update already applied
     }
   }
 
   Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
-    final url = Uri.parse('/leaderboard?limit=$limit');
-    final resp = await http.get(url);
-    if (resp.statusCode == 200) return jsonDecode(resp.body) as List<dynamic>;
-    return [];
+    if (useMockBackend) {
+      debugPrint('Using mock backend: returning local leaderboard (count=${leaderboard.length})');
+      notifyListeners();
+      return leaderboard;
+    }
+
+    final url = Uri.parse('$backendBase/top?limit=$limit'); // backend uses /top
+    try {
+      final resp = await http.get(url);
+      if (resp.statusCode == 200) {
+        final decoded = jsonDecode(resp.body) as List<dynamic>;
+        // Normalize backend fields to UI fields if needed
+        leaderboard = decoded.map((e) {
+          return {
+            'Username': e['username'] ?? e['Username'],
+            'Score': e['score'] ?? e['Score'],
+            'Date': e['when'] ?? e['Date']
+          };
+        }).toList();
+        notifyListeners();
+        return leaderboard;
+      } else {
+        debugPrint('getLeaderboard failed (${resp.statusCode}): ${resp.body}');
+      }
+    } catch (e) {
+      debugPrint('getLeaderboard exception: $e');
+    }
+    // fallback to local mock data
+    notifyListeners();
+    return leaderboard;
   }
 
   void refreshLeaderboad() {
@@ -962,6 +1011,8 @@ class LeaderboardPage extends StatelessWidget {
                 child: Text('Submit'),
                 onPressed: () {
                   context.read<MyGameState>().submitScore(textController.text);
+                  context.read<MyGameState>().setUp(); // Stat new game after submitting this one
+                  context.read<MyGameState>().refreshLeaderboad();
                   Navigator.of(context).pop();
                 }),
               TextButton(
