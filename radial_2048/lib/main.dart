@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(MyApp());
@@ -42,8 +44,15 @@ class MyGameState extends ChangeNotifier {
   int moveNum = 0;
   var undid = false;
   var shouldRepaint = false;
-  var leaderboard = List.generate(10, (i) => random.nextInt(100));
+  var leaderboard = [
+    {"Username": "Alice", "Score": 250, "Date": "2025-10-19"},
+    {"Username": "Bob", "Score": 200, "Date": "2025-10-18"},
+    {"Username": "Charlie", "Score": 180, "Date": "2025-10-17"},
+    {"Username": "Diana", "Score": 150, "Date": "2025-10-16"},
+  ];
   bool gameOver = false;
+  int score = 0;
+  int lastScore = 0;
   
   void printGrid() {
     for (int i = 0; i < 4; i++) {
@@ -53,9 +62,11 @@ class MyGameState extends ChangeNotifier {
 
   void setUp() {
     grid = List.generate(4, (i) => List.generate(4, (j) => 0));
-    lastMove = List.from(grid);
+    lastMove = grid.map((row) => List<int>.from(row)).toList();
     moveNum = 0;
     maxNum = 0;
+    score = 0;
+    lastScore = 0;
     // Keep track of empties
     for (int row = 0; row < 4; row++) {
       for (int col = 0; col < 4; col++) {
@@ -66,6 +77,9 @@ class MyGameState extends ChangeNotifier {
     makeNewTile();
     makeNewTile();
     printGrid();
+
+    getLeaderboard(100);
+
     notifyListeners();
   }
 
@@ -85,7 +99,7 @@ class MyGameState extends ChangeNotifier {
   }
 
   void doMove(Move movement) {
-    lastMove = List.from(grid);
+    lastMove = grid.map((row) => List<int>.from(row)).toList();
     switch (movement) {
       case Move.clockwise:
         debugPrint("clockwise");
@@ -107,6 +121,8 @@ class MyGameState extends ChangeNotifier {
               if (numToMatch == -1) {numToMatch = currentNum;}
               else if (currentNum == numToMatch) {
                 newNums.add(currentNum*2);
+                lastScore = score;
+                addToScore(currentNum*2);
                 if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
                 numToMatch = -1;
               } else {
@@ -188,6 +204,8 @@ class MyGameState extends ChangeNotifier {
               if (numToMatch == -1) {numToMatch = currentNum;}
               else if (currentNum == numToMatch) {
                 newNums.add(currentNum*2);
+                lastScore = score;
+                addToScore(currentNum*2);
                 if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
                 numToMatch = -1;
               } else {
@@ -264,6 +282,8 @@ class MyGameState extends ChangeNotifier {
               if (numToMatch == -1) {numToMatch = currentNum;}
               else if (currentNum == numToMatch) {
                 newNums.add(currentNum*2);
+                lastScore = score;
+                addToScore(currentNum*2);
                 if (currentNum*2 > maxNum) {maxNum = currentNum*2;}
                 numToMatch = -1;
               } else {
@@ -332,6 +352,8 @@ class MyGameState extends ChangeNotifier {
                 numToMatch = -1;
               } else {
                 newNums.add(numToMatch);
+                lastScore = score;
+                addToScore(currentNum*2);
                 numToMatch = currentNum;
               }
             }
@@ -390,17 +412,43 @@ class MyGameState extends ChangeNotifier {
   }
 
   void undo() {
-    grid = List.from(lastMove);
+    grid = lastMove.map((row) => List<int>.from(row)).toList();
     moveNum -= 1;
     undid = true;
     shouldRepaint = true;
+    score = lastScore;
     notifyListeners();
+  }
+
+  void addToScore(int add) {
+    score += add;
   }
   
-  void recordGame(String username, int maxNum) {
-    // TODO: code stuff to record the game
+  // send a score
+  Future<void> submitScore(String username) async {
+    if (username.isEmpty) username = "Anonymous";
+    final url = Uri.parse('/leaderboard'); // relative path when hosted under same domain
+    final resp = await http.post(url,
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'username': username, 'score': score}));
+    if (resp.statusCode != 200) {
+    // handle failure (parse JSON error message)
+      debugPrint('Failed: ' + resp.body);
+    }
+  }
+
+  Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
+    final url = Uri.parse('/leaderboard?limit=$limit');
+    final resp = await http.get(url);
+    if (resp.statusCode == 200) return jsonDecode(resp.body) as List<dynamic>;
+    return [];
+  }
+
+  void refreshLeaderboad() {
+    getLeaderboard(100);
     notifyListeners();
   }
+
 }
 
 class MyHomePage extends StatefulWidget {
@@ -502,8 +550,24 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.outwards);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.outwards); repaintNotifier.value++;});
-          var renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
-          StatusOverlay.show(context, icon: Icons.zoom_out_map, message: "Outwards", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height/10));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final renderBox = myWidgetKey.currentContext?.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              StatusOverlay.show(
+                context,
+                icon: Icons.zoom_out_map,
+                message: "Outwards",
+                targetRect: Rect.fromLTWH(
+                  renderBox.localToGlobal(Offset.zero).dx,
+                  renderBox.localToGlobal(Offset.zero).dy,
+                  renderBox.size.width,
+                  renderBox.size.height/10
+                  ),
+                );
+              }
+          });
+          //var renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          //StatusOverlay.show(context, icon: Icons.zoom_out_map, message: "Outwards", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height/10));
           debugPrint('Outwards');
           break;
         case LogicalKeyboardKey.arrowDown:
@@ -512,8 +576,24 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.inwards);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.inwards); repaintNotifier.value++;});
-          final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
-          StatusOverlay.show(context, icon: Icons.zoom_in_map, message: "Inwards", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final renderBox = myWidgetKey.currentContext?.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              StatusOverlay.show(
+                context,
+                icon: Icons.zoom_in_map,
+                message: "Inwards",
+                targetRect: Rect.fromLTWH(
+                  renderBox.localToGlobal(Offset.zero).dx,
+                  renderBox.localToGlobal(Offset.zero).dy,
+                  renderBox.size.width,
+                  renderBox.size.height/10
+                  ),
+                );
+              }
+          });
+          //final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          //StatusOverlay.show(context, icon: Icons.zoom_in_map, message: "Inwards", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
           debugPrint('Inwards');
           break;
         case LogicalKeyboardKey.arrowRight:
@@ -522,8 +602,24 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.clockwise);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.clockwise); repaintNotifier.value++;});
-          final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
-          StatusOverlay.show(context, icon: Icons.rotate_right, message: "Clockwise", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+            final renderBox = myWidgetKey.currentContext?.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              StatusOverlay.show(
+                context,
+                icon: Icons.rotate_right,
+                message: "Clockwise",
+                targetRect: Rect.fromLTWH(
+                  renderBox.localToGlobal(Offset.zero).dx,
+                  renderBox.localToGlobal(Offset.zero).dy,
+                  renderBox.size.width,
+                  renderBox.size.height/10
+                  ),
+                );
+              }
+          });
+          //final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          //StatusOverlay.show(context, icon: Icons.rotate_right, message: "Clockwise", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
           debugPrint('Clockwise');
           break;
         case LogicalKeyboardKey.arrowLeft:
@@ -532,8 +628,24 @@ class _GamePageState extends State<GamePage> {
           context.read<MyGameState>().doMove(Move.antiClockwise);
           repaintNotifier.value++;
           //WidgetsBinding.instance.addPostFrameCallback((_) {context.read<MyGameState>().doMove(Move.antiClockwise); repaintNotifier.value++;});
-          final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
-          StatusOverlay.show(context, icon: Icons.rotate_left, message: "Anticlockwise", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final renderBox = myWidgetKey.currentContext?.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              StatusOverlay.show(
+                context,
+                icon: Icons.rotate_left,
+                message: "Anticlockwise",
+                targetRect: Rect.fromLTWH(
+                  renderBox.localToGlobal(Offset.zero).dx,
+                  renderBox.localToGlobal(Offset.zero).dy,
+                  renderBox.size.width,
+                  renderBox.size.height/10
+                  ),
+                );
+              }
+          });
+          //final renderBox = myWidgetKey.currentContext!.findRenderObject() as RenderBox;
+          //StatusOverlay.show(context, icon: Icons.rotate_left, message: "Anticlockwise", targetRect: Rect.fromLTWH(renderBox.localToGlobal(Offset.zero).dx, renderBox.localToGlobal(Offset.zero).dy, renderBox.size.width, renderBox.size.height));
           debugPrint('Anticlockwise');
           break;
         default:
@@ -542,104 +654,150 @@ class _GamePageState extends State<GamePage> {
     }
   }
 
+  void onSwipe(String dir) {
+    switch (dir) {
+      case "Up":
+        _onKeyEvent(KeyDownEvent(physicalKey: PhysicalKeyboardKey.keyW, logicalKey: LogicalKeyboardKey.keyW, timeStamp: Duration(milliseconds: 200)));
+        break;
+      case "Down":
+        _onKeyEvent(KeyDownEvent(physicalKey: PhysicalKeyboardKey.keyS, logicalKey: LogicalKeyboardKey.keyS, timeStamp: Duration(milliseconds: 200)));
+        break;
+      case "Left":
+        _onKeyEvent(KeyDownEvent(physicalKey: PhysicalKeyboardKey.keyA, logicalKey: LogicalKeyboardKey.keyA, timeStamp: Duration(milliseconds: 200)));
+        break;
+      case "Right":
+        _onKeyEvent(KeyDownEvent(physicalKey: PhysicalKeyboardKey.keyD, logicalKey: LogicalKeyboardKey.keyD, timeStamp: Duration(milliseconds: 200)));
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     grid = context.watch<MyGameState>().grid;
     wallPoses = context.watch<MyGameState>().wallPoses;
+    //var renderBox = myCanvasKey.currentContext!.findRenderObject() as RenderBox;
     return KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: (event) => _onKeyEvent(event),
-      child: Column(
-        key: myWidgetKey,
-        children: [
-          // TODO: add a tutorial question mark button here
-          Row(
-            children: [
-              Text('Move ${context.watch<MyGameState>().moveNum}'),
-              Spacer(),
-              Text('Highest Number ${context.watch<MyGameState>().maxNum}')
-            ],
-          ),
-          Center(
-            child: CustomPaint(painter: RadialPainter(gameGrid: grid, wallPoses: wallPoses, repaint: repaintNotifier), child: SizedBox.square(dimension: 500.0,))
-          ),
-          // TODO: Make undo button update canvas
-          Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: () {
-                  if (context.read<MyGameState>().moveNum > 0) {
-                    if (!context.read<MyGameState>().undid) {
-                      context.read<MyGameState>().undo();
-                    } else {
-                      showDialog(context: context, barrierDismissible: true,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: Text('No can do!'),
-                            content: Text('You can only undo once at a time, try making a move instead!'),
-                            actions: <Widget>[
-                            TextButton(
-                              child: Text('Ok'),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              })
-                          ]
-                          );
-                        });
-                      }
-                    } else {
-                      showDialog(context: context, barrierDismissible: true,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: Text('No can do!'),
-                            content: Text("You haven't done a move yet to undo,\ntry making a move instead!"),
-                            actions: <Widget>[
-                            TextButton(
-                              child: Text('Ok'),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              })
+      child: GestureDetector(
+        onVerticalDragEnd:(details) {
+          if (details.primaryVelocity! < 0) onSwipe("Up");
+            else if (details.primaryVelocity! > 0) onSwipe("Down");
+        },
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity! < 0) onSwipe("Left");
+          else if (details.primaryVelocity! > 0) onSwipe("Right");
+        },
+        child: LayoutBuilder(builder: (context, constraints) {
+        return Padding(padding: EdgeInsets.all(constraints.biggest.shortestSide*0.02), child: Column(
+          key: myWidgetKey,
+          children: [
+            // TODO: add a tutorial question mark button here
+            Row(
+              children: [
+                Container(decoration: BoxDecoration(border: Border.all(color: Colors.deepOrangeAccent, width: 2), borderRadius: BorderRadius.circular(8)), child: Column(children: [Text('  Score: ${context.watch<MyGameState>().score}  ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                Text('  Move Count: ${context.watch<MyGameState>().moveNum}   ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                Text('  Max Number: ${context.watch<MyGameState>().maxNum}   ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black))])),
+                Spacer(),
+                ElevatedButton.icon(onPressed: () => showDialog(context: context, barrierDismissible: true, builder: (BuildContext context) {
+                  return AlertDialog(title: Text('How to play!'), content: Text('1. Use WASD or arrow keys, or even swipe your fingers to move and rotate the tiles.\n2. Tiles can be pushed outwards to the edge, or inside to the centre.\n3. They can be rotated clockwise or anticlockwise and each circle will go until its own wall.\n4. Two tiles with the same number can merge and they add to your score!\n5. The game ends when the whole board is full or you end it.\n6. Share your results on the leaderboard!'), actions: <Widget>[
+                              TextButton(
+                                child: Text('Ok'),
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                })
+                            ]);
+                }), icon: Icon(Icons.help), label: Text("Help"))
+              ],
+            ),
+            Center( child: LayoutBuilder(builder: (context, constraints) {
+              // Determine the maximum size for the canvas to fit within parent
+              final double maxAvailable = constraints.biggest.shortestSide; 
+              final double canvasSize = maxAvailable * 0.5; // 60% of smaller dimension
+              final double padding = canvasSize * 0.02;     // 20% of canvas
+              return Padding(
+              padding: EdgeInsets.all(padding),
+              child: CustomPaint(painter: RadialPainter(gameGrid: grid, wallPoses: wallPoses, repaint: repaintNotifier), child: SizedBox.fromSize(size: Size.square(canvasSize))
+            ));})
+            ),
+            // TODO: Make undo button update canvas
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    if (context.read<MyGameState>().moveNum > 0) {
+                      if (!context.read<MyGameState>().undid) {
+                        context.read<MyGameState>().undo();
+                      } else {
+                        showDialog(context: context, barrierDismissible: true,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              title: Text('No can do!'),
+                              content: Text('You can only undo once at a time, try making a move instead!'),
+                              actions: <Widget>[
+                              TextButton(
+                                child: Text('Ok'),
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                })
                             ]
-                          );
-                        });
-                  }
-                },
-                icon: Icon(Icons.undo),
-                label: Text('Undo')
-              ),
-              Spacer(),
-              ElevatedButton.icon(
-                onPressed: () {
-                  showDialog(context: context, barrierDismissible: false,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: Text('Restart Game?'),
-                        content: Text('Please confirm whether you want to restart the game.\nYour highest number is ${context.read<MyGameState>().maxNum} and are ${context.read<MyGameState>().moveNum} moves in.'),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text('Go back')),
-                            TextButton(
-                            onPressed: () {
-                              context.read<MyGameState>().setUp();
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text('Restart'))
-                        ]
-                      );
+                            );
+                          });
+                        }
+                      } else {
+                        showDialog(context: context, barrierDismissible: true,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              title: Text('No can do!'),
+                              content: Text("You haven't done a move yet to undo,\ntry making a move instead!"),
+                              actions: <Widget>[
+                              TextButton(
+                                child: Text('Ok'),
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                })
+                              ]
+                            );
+                          });
                     }
-                  );
-                },
-                icon: Icon(Icons.delete),
-                label: Text('Restart')
-              ),
-            ],
-          )
-        ],
-      )
+                  },
+                  icon: Icon(Icons.undo),
+                  label: Text('Undo')
+                ),
+                Spacer(),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    showDialog(context: context, barrierDismissible: false,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text('Restart Game?'),
+                          content: Text('Please confirm whether you want to restart the game.\nYour score is ${context.read<MyGameState>().score} and are ${context.read<MyGameState>().moveNum} moves in.'),
+                          actions: <Widget>[
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text('Go back')),
+                              TextButton(
+                              onPressed: () {
+                                context.read<MyGameState>().setUp();
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text('Restart'))
+                          ]
+                        );
+                      }
+                    );
+                  },
+                  icon: Icon(Icons.delete),
+                  label: Text('Restart')
+                ),
+              ],
+            )
+          ],
+      ));})
+    )
     );
   }
 }
@@ -650,7 +808,7 @@ class RadialPainter extends CustomPainter {
 
   RadialPainter({required List<List<int>> gameGrid, required List<int> wallPoses, required Listenable repaint})
     : grid = gameGrid, this.wallPoses = wallPoses,
-      super(repaint: repaint);
+      super(repaint:repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -685,16 +843,16 @@ class RadialPainter extends CustomPainter {
         paint
       );
       numText = TextPainter(
-        text: TextSpan(text: '${grid[0][i-1]}', style: textStyle),
-        textAlign: TextAlign.left,
-        textDirection: TextDirection.ltr
-      );
+          text: TextSpan(text: grid[0][i-1] != 0 ? '${grid[0][i-1]}' : '  ', style: textStyle),
+          textAlign: TextAlign.left,
+          textDirection: TextDirection.ltr
+        );
       numText.layout(minWidth: 0, maxWidth: double.infinity);
-      numText.paint(canvas, Offset(center.width - numText.width/2 + xAdj*size.width/22, center.height - numText.height/2 + yAdj*size.height/22));
+      numText.paint(canvas, Offset(center.width + (size.width/20) * cos(((pi/2)*(i-1) + (pi/4))) - numText.width/2, center.height + (size.width/20) * sin(((pi/2)*(i-1) + (pi/4))) - numText.height/2));
       if (i%2 == 0) {yAdj = yAdj*-1;} else {xAdj = xAdj*-1;}
     }
     // Draw 3 outer layers of annular sectors
-    var layerAdjustment = size.width/20;
+    var layerAdjustment = size.width/30;
     xAdj = -1;
     yAdj = -1;
 
@@ -725,34 +883,34 @@ class RadialPainter extends CustomPainter {
         canvas.drawPath(copyPath, paint);
         
         // Store the text and its position
-        texts[Offset(center.width + (size.width/20+layerAdjustment+size.width/10) * cos(((pi/2)*(j-1) + (pi/4))) - numText.width/2, center.height + (size.width/20+layerAdjustment+size.width/10) * sin(((pi/2)*(j-1) + (pi/4))) - numText.height/2)] = '${grid[i][j-1]}';
+        texts[Offset(center.width + (size.width/20+layerAdjustment+size.width/10) * cos(((pi/2)*(j-1) + (pi/4))) - numText.width/2, center.height + (size.width/20+layerAdjustment+size.width/10) * sin(((pi/2)*(j-1) + (pi/4))) - numText.height/2)] = grid[i][j-1] != 0 ? '${grid[i][j-1]}' : '  ';
       }
-      layerAdjustment += size.width/20+size.width/10;
+      layerAdjustment += size.width/30+size.width/10;
     }
 
     // Paint the walls onto the correct locations
     for (final (index, wallPose) in wallPoses.indexed) {
       var wallPaint = Paint()
-        ..color = Colors.black45
+        ..color = Colors.black
         ..strokeWidth = size.width/120
         ..style = PaintingStyle.fill
         ..maskFilter = const MaskFilter.blur(BlurStyle.inner, 0.5);
 
       switch (wallPose) {
         case 0:
-          double x = size.width/130 + (size.width/20+size.width/10) * (index);
+          double x = size.width/130 + (size.width/30+size.width/10) * (index);
           canvas.drawLine(Offset(center.width + x, center.width), Offset(center.width + x + size.width/10, center.width), wallPaint);
           break;
         case 2:
-          double x = size.width/130 + (size.width/20+size.width/10) * (index);
+          double x = size.width/130 + (size.width/30+size.width/10) * (index);
           canvas.drawLine(Offset(center.width - x, center.width), Offset(center.width - x - size.width/10, center.width), wallPaint);
           break;
         case 1:
-          double y = size.width/130 + (size.width/20+size.width/10) * (index);
+          double y = size.width/130 + (size.width/30+size.width/10) * (index);
           canvas.drawLine(Offset(center.width, center.width + y), Offset(center.width, center.width + y + size.width/10), wallPaint);
           break;
         case 3:
-          double y = size.width/130 + (size.width/20+size.width/10) * (index);
+          double y = size.width/130 + (size.width/30+size.width/10) * (index);
           canvas.drawLine(Offset(center.width, center.width - y), Offset(center.width, center.width - y - size.width/10), wallPaint);
           break;
       }
@@ -761,15 +919,15 @@ class RadialPainter extends CustomPainter {
     
 
     // Paint the texts over the shape
-    // TODO: do not show the number if it is 0
     for (var entry in texts.entries) {
-      // TODO: Don't show text if it's equal to 0
-      numText = TextPainter(
+      if (entry.value != "0") {
+        numText = TextPainter(
           text: TextSpan(text: entry.value, style: textStyle),
           textAlign: TextAlign.left,
           textDirection: TextDirection.ltr
         )..layout(minWidth: 0, maxWidth: double.infinity);
-      numText.paint(canvas, entry.key);
+        numText.paint(canvas, entry.key);
+      }
     }
   }
 
@@ -780,80 +938,72 @@ class RadialPainter extends CustomPainter {
 }
 
 class LeaderboardPage extends StatelessWidget {
-  final List<Map<String, dynamic>> scores = [
-    {"Username": "Alice", "Score": 250, "Date": "2025-10-19"},
-    {"Username": "Bob", "Score": 200, "Date": "2025-10-18"},
-    {"Username": "Charlie", "Score": 180, "Date": "2025-10-17"},
-    {"Username": "Diana", "Score": 150, "Date": "2025-10-16"},
-  ];
+
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Leaderboard")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal, // allow sideways scroll if needed
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                children: [
-                  _buildCell("Rank", isHeader: true),
-                  _buildCell("Username", isHeader: true),
-                  _buildCell("Score", isHeader: true),
-                  _buildCell("Date", isHeader: true),
-                ],
+    final leaderboard = context.watch<MyGameState>().leaderboard;
+    final TextEditingController textController = TextEditingController();
+    return LayoutBuilder(builder: (context, constraints) {
+      return Padding(padding: EdgeInsets.all(constraints.biggest.shortestSide*0.02), child: Center(child: 
+      Column(children: 
+        [Row(children: [
+          ElevatedButton.icon(onPressed: () => showDialog(context: context, barrierDismissible: true, builder: (BuildContext context) {
+            return AlertDialog(title: Text('Upload your score!'), content: Text('Submit your username and score to the leaderboard, the top 100 are public for everyone!\n If you chose to, you can enter nothing and you will be anonymous'), actions: <Widget>[
+              TextField(
+                controller: textController,
+                decoration: InputDecoration(hintText: "Enter your chosen username: "),
+                onSubmitted: (value) {
+                  context.read<MyGameState>().submitScore(value);
+                  Navigator.of(context).pop();
+                },
               ),
-              const Divider(height: 1, thickness: 1),
-
-              // Data Rows (scrollable vertically)
-              ExpandedSection(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: scores.length,
-                  itemBuilder: (context, index) {
-                    final row = scores[index];
-                    final rank = index + 1; // automatic rank
-                    return Row(
-                      children: [
-                        _buildCell(rank.toString()),
-                        _buildCell(row["Username"].toString()),
-                        _buildCell(row["Score"].toString()),
-                        _buildCell(row["Date"].toString()),
-                      ],
-                    );
-                  },
-                ),
+              TextButton(
+                child: Text('Submit'),
+                onPressed: () {
+                  context.read<MyGameState>().submitScore(textController.text);
+                  Navigator.of(context).pop();
+                }),
+              TextButton(
+                child: Text('Cancel'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                })
+            ]);
+          }), label: Text('Submit Score'), icon: Icon(Icons.save)),
+          Spacer(),
+          Text("Check out the top 100 scores! Can you beat them?", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+          Spacer(),
+          ElevatedButton.icon(onPressed: () => context.read()<MyGameState>().refreshLeaderboad(), icon: Icon(Icons.refresh), label: Text("Refresh"))
+        ],),
+        SizedBox(height: constraints.biggest.shortestSide*0.03),
+          Expanded(child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(constraints: BoxConstraints(minWidth: constraints.maxWidth*0.95), child: SingleChildScrollView(
+            scrollDirection: Axis.vertical,
+            child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.deepOrangeAccent, width: 2), borderRadius: BorderRadius.circular(8)), 
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Expanded(child: Text('Rank', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+                DataColumn(label: Expanded(child: Text('Username', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+                DataColumn(label: Expanded(child: Text('Score', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+                DataColumn(label: Expanded(child: Text('Date', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)))),
+              ],
+              rows: List.generate(leaderboard.length, (index) {
+                final score = leaderboard[index];
+                return DataRow(cells: [
+                  DataCell(Text((index + 1).toString())), // Rank
+                  DataCell(Text(score['Username'].toString())),
+                  DataCell(Text(score['Score'].toString())),
+                  DataCell(Text(score['Date'].toString())),
+                  ]);
+                }),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
+            ),
+          ))))]
+        )));});
+    }
   }
-
-  Widget _buildCell(String text, {bool isHeader = false}) {
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.all(8.0),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        color: isHeader ? Colors.blue.shade100 : null,
-      ),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-          fontSize: 14,
-        ),
-      ),
-    );
-  }
-}
 
 class ExpandedSection extends StatelessWidget {
   final Widget child;
@@ -935,7 +1085,7 @@ class StatusOverlay {
     animationController.forward();
 
     // Auto-hide
-    Future.delayed(const Duration(seconds: 2), () async {
+    Future.delayed(const Duration(milliseconds: 800), () async {
       await animationController.reverse();
       entry.remove();
       _currentEntry = null;
