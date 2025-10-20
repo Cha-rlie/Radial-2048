@@ -725,7 +725,7 @@ class _GamePageState extends State<GamePage> {
     grid = context.watch<MyGameState>().grid;
     wallPoses = context.watch<MyGameState>().wallPoses;
     //var renderBox = myCanvasKey.currentContext!.findRenderObject() as RenderBox;
-    return KeyboardListener(
+    return KeyboardListener(  
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: (event) => _onKeyEvent(event),
