@@ -37,14 +37,20 @@ class MyGameState extends ChangeNotifier {
   late List<List<int>> grid;
   var empty = [];
   int maxNum = 0;
-  //TODO: TRACK THE HIGHEST NUMBER!
   late List<List<int>> lastMove;
   List<int> wallPoses = [];
   int moveNum = 0;
   var undid = false;
   var shouldRepaint = false;
   var leaderboard = List.generate(10, (i) => random.nextInt(100));
+  bool gameOver = false;
   
+  void printGrid() {
+    for (int i = 0; i < 4; i++) {
+      debugPrint("${grid[i]}");
+    }
+  }
+
   void setUp() {
     grid = List.generate(4, (i) => List.generate(4, (j) => 0));
     lastMove = List.from(grid);
@@ -59,17 +65,23 @@ class MyGameState extends ChangeNotifier {
     wallPoses = List.generate(4, (i) => random.nextInt(4));
     makeNewTile();
     makeNewTile();
+    printGrid();
     notifyListeners();
   }
 
   void makeNewTile() {
     // Find a random empty space on the grid
-    var tilePos = empty[random.nextInt(empty.length)];
-    empty.remove(tilePos);
-    // Produce a new number with a 10% of being a 4 and a 90% chance of being a 2
-    int newValue = random.nextInt(10) == 0 ? 4 : 2;
-    grid[tilePos[0]][tilePos[1]] = newValue;
-    if (newValue > maxNum) maxNum = newValue;
+    if (empty.isNotEmpty) {
+      var tilePos = empty[random.nextInt(empty.length)];
+      empty.remove(tilePos);
+      // Produce a new number with a 10% of being a 4 and a 90% chance of being a 2
+      int newValue = random.nextInt(10) == 0 ? 4 : 2;
+      grid[tilePos[0]][tilePos[1]] = newValue;
+      if (newValue > maxNum) maxNum = newValue;
+    } else {
+      gameOver = true;
+      debugPrint("GAMEOVER!");
+    }
   }
 
   void doMove(Move movement) {
@@ -136,68 +148,138 @@ class MyGameState extends ChangeNotifier {
         }
         break;
       case Move.inwards:
-        // Repeat this for all of the columns
-        for (var i = 0; i < 4; i++) {
-          var nextPos = 0; // Keep track of the next spot to fill
-          for (var j = 0; j < 4; j++) { // Loop through the cells in the column
-            if (grid[j][i] != 0) { // If the cell is not empty
-              // If the next cell exists and is equal to this one
-              if (j < 3 && grid[j+1][i] == grid[j][i]) {
-                int newValue = grid[j][i]*2;
-                grid[nextPos][i] = newValue;
-                grid[j+1][i] = 0;
-                empty.add([j+1, i]);
-                if (newValue > maxNum) maxNum = newValue;
+      // TODO: UPDATE EMPTIES!!!
+        // Repeat this for all of the sectors
+        // Goes from bottom-right clockwise
+        for (var sec = 0; sec < 4; sec++) {
+          List<int> newNums = [];
+          int numToMatch = -1;
+          for (var radi = 0; radi < 4; radi++) {
+            int currentNum = grid[radi][sec];
+            // If the next cell is not empty
+            debugPrint("inwards");
+            debugPrint("currentNum = $currentNum");
+            debugPrint("NumToMatch = $numToMatch");
+            if (currentNum != 0) {
+              if (numToMatch == -1) {numToMatch = currentNum;}
+              else if (currentNum == numToMatch) {
+                newNums.add(currentNum*2);
+                numToMatch = -1;
+              } else {
+                newNums.add(numToMatch);
+                numToMatch = currentNum;
               }
-              else {
-                grid[nextPos][i] = grid[j][i];
-              }
-              // Clear the cells if something has been moved
-              if (nextPos != j) {
-                grid[j][i] = 0;
-                empty.add([j, i]);
-                empty.remove([nextPos, i]);
-              }
-              // ^ Fill up the next position cell as required
-              nextPos += 1; // Increment the next available position
+            }
+          }
+          if (numToMatch != -1) {newNums.add(numToMatch);}
+          debugPrint("newNums = $newNums");
+          // Put new list in the grid
+          for (var radi = 0; radi < 4; radi++) {
+            if (radi < newNums.length) {
+              grid[radi][sec] = newNums[radi];
+            } else {
+              grid[radi][sec] = 0;
             }
           }
         }
+        // for (var i = 0; i < 4; i++) {
+        //   var nextPos = 0; // Keep track of the next spot to fill
+        //   for (var j = 0; j < 4; j++) { // Loop through the cells in the column
+        //     if (grid[j][i] != 0) { // If the cell is not empty
+        //       // If the next cell exists and is equal to this one
+        //       if (j < 3 && grid[j+1][i] == grid[j][i]) {
+        //         int newValue = grid[j][i]*2;
+        //         grid[nextPos][i] = newValue;
+        //         grid[j+1][i] = 0;
+        //         empty.add([j+1, i]);
+        //         if (newValue > maxNum) maxNum = newValue;
+        //       }
+        //       else {
+        //         grid[nextPos][i] = grid[j][i];
+        //       }
+        //       // Clear the cells if something has been moved
+        //       if (nextPos != j) {
+        //         grid[j][i] = 0;
+        //         empty.add([j, i]);
+        //         empty.remove([nextPos, i]);
+        //       }
+        //       // ^ Fill up the next position cell as required
+        //       nextPos += 1; // Increment the next available position
+        //     }
+        //   }
+        // }
         break;
       case Move.outwards:
         // Repeat this for all of the columns
-        for (var i = 0; i < 4; i++) {
-          var nextPos = 3; // Keep track of the next spot to fill
-          for (var j = 3; j > -1; j--) { // Loop through the cells in the column
-            if (grid[j][i] != 0) { // If the cell is not empty
-              // If the next cell exists and is equal to this one
-              if (j > 0 && grid[j-1][i] == grid[j][i]) {
-                int newValue = grid[j][i]*2;
-                grid[nextPos][i] = newValue;
-                grid[j-1][i] = 0;
-                empty.add([j-1, i]);
-                if (newValue > maxNum) maxNum = newValue;
+        // Goes from bottom-right clockwise
+        for (var sec = 0; sec < 4; sec++) {
+          List<int> newNums = [];
+          int numToMatch = -1;
+          for (var radi = 3; radi > -1; radi--) {
+            int currentNum = grid[radi][sec];
+            debugPrint("outwards");
+            debugPrint("currentNum = $currentNum");
+            debugPrint("NumToMatch = $numToMatch");
+            // If the next cell is not empty
+            if (currentNum != 0) {
+              if (numToMatch == -1) {numToMatch = currentNum;}
+              else if (currentNum == numToMatch) {
+                newNums.add(currentNum*2);
+                numToMatch = -1;
+              } else {
+                newNums.add(numToMatch);
+                numToMatch = currentNum;
               }
-              else {
-                grid[nextPos][i] = grid[j][i];
-              }
-              // Clear the cells if something has been moved
-              if (nextPos != j) {
-                grid[j][i] = 0;
-                empty.add([j, i]);
-                empty.remove([nextPos, i]);
-              }
-              // ^ Fill up the next position cell as required
-              nextPos -= 1; // Increment the next available position
+            }
+          }
+          if (numToMatch != -1) {newNums.add(numToMatch);}
+          debugPrint("newNums = $newNums");
+          // Put new list in the grid
+          for (var radi = 0; radi < 4; radi++) {
+            if (radi < newNums.length) {
+              grid[3-radi][sec] = newNums[radi];
+            } else {
+              grid[3-radi][sec] = 0;
             }
           }
         }
+
+
+        // Repeat this for all of the columns
+        // for (var i = 0; i < 4; i++) {
+        //   var nextPos = 3; // Keep track of the next spot to fill
+        //   for (var j = 3; j > -1; j--) { // Loop through the cells in the column
+        //     if (grid[j][i] != 0) { // If the cell is not empty
+        //       // If the next cell exists and is equal to this one
+        //       if (j > 0 && grid[j-1][i] == grid[j][i]) {
+        //         int newValue = grid[j][i]*2;
+        //         grid[nextPos][i] = newValue;
+        //         grid[j-1][i] = 0;
+        //         empty.add([j-1, i]);
+        //         if (newValue > maxNum) maxNum = newValue;
+        //       }
+        //       else {
+        //         grid[nextPos][i] = grid[j][i];
+        //       }
+        //       // Clear the cells if something has been moved
+        //       if (nextPos != j) {
+        //         grid[j][i] = 0;
+        //         empty.add([j, i]);
+        //         empty.remove([nextPos, i]);
+        //       }
+        //       // ^ Fill up the next position cell as required
+        //       nextPos -= 1; // Increment the next available position
+        //     }
+        //   }
+        // }
+        break;
     }
     moveNum += 1;
     undid = false;
     makeNewTile();
     shouldRepaint = true;
     debugPrint('a move has actually been done');
+    printGrid();
     notifyListeners();
   }
 
@@ -524,7 +606,7 @@ class RadialPainter extends CustomPainter {
         canvas.drawPath(copyPath, paint);
         
         // Store the text and its position
-        texts[Offset(center.width + (size.width/20+layerAdjustment+size.width/10) * sin(((pi/2)*(j-1) + (pi/4))) - numText.width/2, center.height + (size.width/20+layerAdjustment+size.width/10) * cos(((pi/2)*(j-1) + (pi/4))) - numText.height/2)] = '${grid[i][j-1]}';
+        texts[Offset(center.width + (size.width/20+layerAdjustment+size.width/10) * cos(((pi/2)*(j-1) + (pi/4))) - numText.width/2, center.height + (size.width/20+layerAdjustment+size.width/10) * sin(((pi/2)*(j-1) + (pi/4))) - numText.height/2)] = '${grid[i][j-1]}';
       }
       layerAdjustment += size.width/20+size.width/10;
     }
@@ -546,11 +628,11 @@ class RadialPainter extends CustomPainter {
           double x = size.width/130 + (size.width/20+size.width/10) * (index);
           canvas.drawLine(Offset(center.width - x, center.width), Offset(center.width - x - size.width/10, center.width), wallPaint);
           break;
-        case 1:
+        case 3:
           double y = size.width/130 + (size.width/20+size.width/10) * (index);
           canvas.drawLine(Offset(center.width, center.width + y), Offset(center.width, center.width + y + size.width/10), wallPaint);
           break;
-        case 3:
+        case 1:
           double y = size.width/130 + (size.width/20+size.width/10) * (index);
           canvas.drawLine(Offset(center.width, center.width - y), Offset(center.width, center.width - y - size.width/10), wallPaint);
           break;
@@ -579,20 +661,87 @@ class RadialPainter extends CustomPainter {
 }
 
 class LeaderboardPage extends StatelessWidget {
+  final List<Map<String, dynamic>> scores = [
+    {"Username": "Alice", "Score": 250, "Date": "2025-10-19"},
+    {"Username": "Bob", "Score": 200, "Date": "2025-10-18"},
+    {"Username": "Charlie", "Score": 180, "Date": "2025-10-17"},
+    {"Username": "Diana", "Score": 150, "Date": "2025-10-16"},
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        children: [
-          Text('✨Leaderboard✨'),
-          ListView(
+    return Scaffold(
+      appBar: AppBar(title: const Text("Leaderboard")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal, // allow sideways scroll if needed
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (var fav in context.watch<MyGameState>().leaderboard)
-                Text("$fav"),
+              // Header Row
+              Row(
+                children: [
+                  _buildCell("Rank", isHeader: true),
+                  _buildCell("Username", isHeader: true),
+                  _buildCell("Score", isHeader: true),
+                  _buildCell("Date", isHeader: true),
+                ],
+              ),
+              const Divider(height: 1, thickness: 1),
+
+              // Data Rows (scrollable vertically)
+              ExpandedSection(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: scores.length,
+                  itemBuilder: (context, index) {
+                    final row = scores[index];
+                    final rank = index + 1; // automatic rank
+                    return Row(
+                      children: [
+                        _buildCell(rank.toString()),
+                        _buildCell(row["Username"].toString()),
+                        _buildCell(row["Score"].toString()),
+                        _buildCell(row["Date"].toString()),
+                      ],
+                    );
+                  },
+                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  Widget _buildCell(String text, {bool isHeader = false}) {
+    return Container(
+      width: 100,
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        color: isHeader ? Colors.blue.shade100 : null,
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+}
+
+class ExpandedSection extends StatelessWidget {
+  final Widget child;
+  const ExpandedSection({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(child: child);
   }
 }
