@@ -53,12 +53,7 @@ class MyGameState extends ChangeNotifier {
   int moveNum = 0;
   var undid = false;
   var shouldRepaint = false;
-  List<Map<String, dynamic>> leaderboard = [
-    {"Username": "Alice", "Score": 250, "Date": "2025-10-19"},
-    {"Username": "Bob", "Score": 200, "Date": "2025-10-18"},
-    {"Username": "Charlie", "Score": 180, "Date": "2025-10-17"},
-    {"Username": "Diana", "Score": 150, "Date": "2025-10-16"},
-  ];
+  List<Map<String, dynamic>> leaderboard = [];
   bool gameOver = false;
   int score = 0;
   int lastScore = 0;
@@ -479,7 +474,12 @@ Future<void> submitScore(String username) async {
 
 
 Future<List<Map<String, dynamic>>> getLeaderboard([int limit = 100]) async {
-  if (useMockBackend) return leaderboard;
+  if (useMockBackend) return [
+    {"Username": "Alice", "Score": 250, "Date": "2025-10-19"},
+    {"Username": "Bob", "Score": 200, "Date": "2025-10-18"},
+    {"Username": "Charlie", "Score": 180, "Date": "2025-10-17"},
+    {"Username": "Diana", "Score": 150, "Date": "2025-10-16"},
+  ];
 
   try {
     final url = Uri.parse('/leaderboard?limit=$limit');
