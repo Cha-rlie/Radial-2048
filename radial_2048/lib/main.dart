@@ -430,33 +430,34 @@ class MyGameState extends ChangeNotifier {
   void addToScore(int add) {
     score += add;
   }
-  
-  // send a score
-  Future<void> submitScore(String username) async {
+
+Future<void> submitScore(String username) async {
   if (username.isEmpty) username = "Anonymous";
 
-  final newEntry = {
-    "username": username,
-    "score": score,
-    "Date": DateTime.now().toIso8601String().split('T').first
-  };
+  // Optimistic local update (optional)
+  leaderboard.insert(0, {
+    'username': username,
+    'score': score,
+    'date': DateTime.now().toIso8601String()
+  });
 
-  // Optimistic local update
-  leaderboard.insert(0, newEntry);
-  leaderboard.sort((a, b) => (b["score"] as int).compareTo(a["score"] as int));
+  leaderboard.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
   if (leaderboard.length > 100) {
     leaderboard = leaderboard.sublist(0, 100);
   }
   notifyListeners();
 
+  // Skip backend if using mock
   if (useMockBackend) return;
 
   try {
+    final url = Uri.parse('/leaderboard'); // relative path via nginx
     final resp = await http.post(
-      Uri.parse('/leaderboard'),  // <-- backend endpoint
+      url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({"username": username, "score": score}),
+      body: jsonEncode({'username': username, 'score': score}),
     );
+
     if (resp.statusCode != 200) {
       debugPrint('submitScore failed (${resp.statusCode}): ${resp.body}');
     }
@@ -466,20 +467,26 @@ class MyGameState extends ChangeNotifier {
 }
 
 
-Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
+
+Future<List<Map<String, dynamic>>> getLeaderboard([int limit = 100]) async {
   if (useMockBackend) return leaderboard;
 
   try {
-    final resp = await http.get(Uri.parse('/leaderboard?limit=$limit')); // <-- backend endpoint
+    final url = Uri.parse('/leaderboard?limit=$limit');
+    final resp = await http.get(url);
+
     if (resp.statusCode == 200) {
-      final decoded = jsonDecode(resp.body) as List<dynamic>;
-      leaderboard = decoded.map((e) {
+      final List<dynamic> decoded = jsonDecode(resp.body);
+
+      // Map backend JSON to frontend UI keys
+      leaderboard = decoded.map<Map<String, dynamic>>((e) {
         return {
-          'username': e['username'],
+          'username': e['username'], // lowercase matches backend
           'score': e['score'],
-          'date': e['date']  // matches backend field
+          'date': e['date'],         // lowercase matches backend
         };
       }).toList();
+
       notifyListeners();
       return leaderboard;
     } else {
@@ -488,6 +495,7 @@ Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
   } catch (e) {
     debugPrint('getLeaderboard exception: $e');
   }
+
   return leaderboard;
 }
 
