@@ -20,7 +20,7 @@ void main() async {
   // Ensure DB directory exists
   Directory(p.dirname(dbFilePath)).createSync(recursive: true);
 
-  final db = sqlite3.open(dbFilePath);
+  final db = sqlite3.open(dbFilePath, mode: OpenMode.readWriteCreate);
   _ensureSchema(db);
   print('DB path: $dbFilePath');
 
@@ -105,10 +105,15 @@ Future<Response> _handlePostScore(Request req, Database db) async {
 
   final stmt = db.prepare('INSERT INTO scores (username, score, created_at) VALUES (?, ?, ?);');
   try {
+    print('Inserting: username=$username, score=$score');
     stmt.execute([username, score, DateTime.now().toUtc().toIso8601String()]);
+    print('Insert successful');
+  } catch (e, s) {
+    print('Insert failed: $e\n$s');
   } finally {
     stmt.dispose();
   }
+
 
   submissionLog[ip]!.add(now);
 

@@ -42,6 +42,9 @@ class MyGameState extends ChangeNotifier {
   static const bool useMockBackend = false; //bool.fromEnvironment('USE_MOCK', defaultValue: true);
   static const String backendBase = '/leaderboard';//String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:8080');
 
+  // Notifier the painter listens to so UI repaints reliably when grid changes.
+  final ValueNotifier<int> repaintNotifier = ValueNotifier<int>(0);
+
   late List<List<int>> grid;
   var empty = [];
   int maxNum = 0;
@@ -85,6 +88,9 @@ class MyGameState extends ChangeNotifier {
     printGrid();
 
     refreshLeaderboard();
+
+    // trigger painter update
+    repaintNotifier.value++;
 
     notifyListeners();
   }
@@ -415,22 +421,26 @@ class MyGameState extends ChangeNotifier {
     shouldRepaint = true;
     debugPrint('a move has actually been done');
     printGrid();
+    // notify the painter as well as listeners
+    repaintNotifier.value++;
     notifyListeners();
   }
-
-  void undo() {
-    grid = lastMove.map((row) => List<int>.from(row)).toList();
-    moveNum -= 1;
-    undid = true;
-    shouldRepaint = true;
-    score = lastScore;
-    notifyListeners();
-  }
-
-  void addToScore(int add) {
-    score += add;
-  }
-
+ 
+   void undo() {
+     grid = lastMove.map((row) => List<int>.from(row)).toList();
+     moveNum -= 1;
+     undid = true;
+     shouldRepaint = true;
+     score = lastScore;
+    // ensure the canvas repaints when undo restores grid
+    repaintNotifier.value++;
+     notifyListeners();
+   }
+ 
+   void addToScore(int add) {
+     score += add;
+   }
+ 
 Future<void> submitScore(String username) async {
   if (username.isEmpty) username = "Anonymous";
 
@@ -464,7 +474,7 @@ Future<void> submitScore(String username) async {
   } catch (e) {
     debugPrint('submitScore exception: $e');
   }
-}
+ }
 
 
 
@@ -501,11 +511,11 @@ Future<List<Map<String, dynamic>>> getLeaderboard([int limit = 100]) async {
 
 
   void refreshLeaderboard() {
-    getLeaderboard(100);
-    notifyListeners();
+    // wait for async fetch then notify so callers/consumers reliably update
+    getLeaderboard(100).then((_) => notifyListeners());
   }
-
-}
+ 
+ }
 
 class MyHomePage extends StatefulWidget {
   @override
