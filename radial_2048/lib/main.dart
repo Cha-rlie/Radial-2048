@@ -39,8 +39,8 @@ class MyGameState extends ChangeNotifier {
 
   // Use compile-time flags to switch modes:
   // flutter run --dart-define=USE_MOCK=false --dart-define=BACKEND_URL=http://rpi:5000
-  static const bool useMockBackend = bool.fromEnvironment('USE_MOCK', defaultValue: true);
-  static const String backendBase = String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:5000');
+  static const bool useMockBackend = false; //bool.fromEnvironment('USE_MOCK', defaultValue: true);
+  static const String backendBase = '/leaderboard';//String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:8080');
 
   late List<List<int>> grid;
   var empty = [];
@@ -433,67 +433,66 @@ class MyGameState extends ChangeNotifier {
   
   // send a score
   Future<void> submitScore(String username) async {
-    if (username.isEmpty) username = "Anonymous";
-    final newEntry = {"Username": username, "Score": score, "Date": DateTime.now().toIso8601String().split('T').first};
-    leaderboard.insert(0, newEntry);
-    leaderboard.sort((a,b) => (b["Score"] as int).compareTo(a["Score"] as int));
-    if (leaderboard.length > 100) {
-      leaderboard = leaderboard.sublist(0, 100);
-    }
-    notifyListeners();
-    if (useMockBackend) {
-      debugPrint('Using mock backend; submit scored locally only.');
-      return;
-    }
+  if (username.isEmpty) username = "Anonymous";
 
-    final url = Uri.parse('$backendBase/submit'); // match backend endpoint
-    try {
-      final resp = await http.post(url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'username': username, 'score': score}));
-      if (resp.statusCode != 200) {
-        debugPrint('submitScore failed (${resp.statusCode}): ${resp.body}');
-      }
-    } catch (e) {
-      debugPrint('submitScore exception: $e');
-      // keep optimistic update already applied
-    }
+  final newEntry = {
+    "Username": username,
+    "Score": score,
+    "Date": DateTime.now().toIso8601String().split('T').first
+  };
+
+  // Optimistic local update
+  leaderboard.insert(0, newEntry);
+  leaderboard.sort((a, b) => (b["Score"] as int).compareTo(a["Score"] as int));
+  if (leaderboard.length > 100) {
+    leaderboard = leaderboard.sublist(0, 100);
   }
+  notifyListeners();
 
-  Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
-    if (useMockBackend) {
-      debugPrint('Using mock backend: returning local leaderboard (count=${leaderboard.length})');
+  if (useMockBackend) return;
+
+  try {
+    final resp = await http.post(
+      Uri.parse('/leaderboard'),  // <-- backend endpoint
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username, 'score': score}),
+    );
+    if (resp.statusCode != 200) {
+      debugPrint('submitScore failed (${resp.statusCode}): ${resp.body}');
+    }
+  } catch (e) {
+    debugPrint('submitScore exception: $e');
+  }
+}
+
+
+Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
+  if (useMockBackend) return leaderboard;
+
+  try {
+    final resp = await http.get(Uri.parse('/leaderboard?limit=$limit')); // <-- backend endpoint
+    if (resp.statusCode == 200) {
+      final decoded = jsonDecode(resp.body) as List<dynamic>;
+      leaderboard = decoded.map((e) {
+        return {
+          'Username': e['username'],
+          'Score': e['score'],
+          'Date': e['date']  // matches backend field
+        };
+      }).toList();
       notifyListeners();
       return leaderboard;
+    } else {
+      debugPrint('getLeaderboard failed (${resp.statusCode}): ${resp.body}');
     }
-
-    final url = Uri.parse('$backendBase/top?limit=$limit'); // backend uses /top
-    try {
-      final resp = await http.get(url);
-      if (resp.statusCode == 200) {
-        final decoded = jsonDecode(resp.body) as List<dynamic>;
-        // Normalize backend fields to UI fields if needed
-        leaderboard = decoded.map((e) {
-          return {
-            'Username': e['username'] ?? e['Username'],
-            'Score': e['score'] ?? e['Score'],
-            'Date': e['when'] ?? e['Date']
-          };
-        }).toList();
-        notifyListeners();
-        return leaderboard;
-      } else {
-        debugPrint('getLeaderboard failed (${resp.statusCode}): ${resp.body}');
-      }
-    } catch (e) {
-      debugPrint('getLeaderboard exception: $e');
-    }
-    // fallback to local mock data
-    notifyListeners();
-    return leaderboard;
+  } catch (e) {
+    debugPrint('getLeaderboard exception: $e');
   }
+  return leaderboard;
+}
 
-  void refreshLeaderboad() {
+
+  void refreshLeaderboard() {
     getLeaderboard(100);
     notifyListeners();
   }
@@ -1012,7 +1011,7 @@ class LeaderboardPage extends StatelessWidget {
                 onPressed: () {
                   context.read<MyGameState>().submitScore(textController.text);
                   context.read<MyGameState>().setUp(); // Stat new game after submitting this one
-                  context.read<MyGameState>().refreshLeaderboad();
+                  context.read<MyGameState>().refreshLeaderboard();
                   Navigator.of(context).pop();
                 }),
               TextButton(
@@ -1025,7 +1024,7 @@ class LeaderboardPage extends StatelessWidget {
           Spacer(),
           Text("Check out the top 100 scores! Can you beat them?", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
           Spacer(),
-          ElevatedButton.icon(onPressed: () => context.read()<MyGameState>().refreshLeaderboad(), icon: Icon(Icons.refresh), label: Text("Refresh"))
+          ElevatedButton.icon(onPressed: () => context.read()<MyGameState>().refreshLeaderboard(), icon: Icon(Icons.refresh), label: Text("Refresh"))
         ],),
         SizedBox(height: constraints.biggest.shortestSide*0.03),
           Expanded(child: SingleChildScrollView(
