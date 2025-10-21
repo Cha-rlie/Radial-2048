@@ -60,9 +60,17 @@ void main() async {
 
   final app = Router();
 
+  // Leaderboard routes
   app.get('/leaderboard', (Request req) => _handleGetLeaderboard(req, db));
+  app.get('/leaderboard/', (Request req) => _handleGetLeaderboard(req, db));
+
   app.post('/leaderboard', (Request req) => _handlePostScore(req, db));
+  app.post('/leaderboard/', (Request req) => _handlePostScore(req, db));
+
+  // Player routes
   app.get('/player/<username>', (Request req, String username) => _handleGetPlayer(req, db, username));
+  app.get('/player/<username>/', (Request req, String username) => _handleGetPlayer(req, db, username));
+
 
   final handler = const Pipeline()
       .addMiddleware(logRequests())
