@@ -84,7 +84,7 @@ class MyGameState extends ChangeNotifier {
     makeNewTile();
     printGrid();
 
-    getLeaderboard(100);
+    refreshLeaderboard();
 
     notifyListeners();
   }
@@ -436,14 +436,14 @@ class MyGameState extends ChangeNotifier {
   if (username.isEmpty) username = "Anonymous";
 
   final newEntry = {
-    "Username": username,
-    "Score": score,
+    "username": username,
+    "score": score,
     "Date": DateTime.now().toIso8601String().split('T').first
   };
 
   // Optimistic local update
   leaderboard.insert(0, newEntry);
-  leaderboard.sort((a, b) => (b["Score"] as int).compareTo(a["Score"] as int));
+  leaderboard.sort((a, b) => (b["score"] as int).compareTo(a["score"] as int));
   if (leaderboard.length > 100) {
     leaderboard = leaderboard.sublist(0, 100);
   }
@@ -455,7 +455,7 @@ class MyGameState extends ChangeNotifier {
     final resp = await http.post(
       Uri.parse('/leaderboard'),  // <-- backend endpoint
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'score': score}),
+      body: jsonEncode({"username": username, "score": score}),
     );
     if (resp.statusCode != 200) {
       debugPrint('submitScore failed (${resp.statusCode}): ${resp.body}');
@@ -475,9 +475,9 @@ Future<List<dynamic>> getLeaderboard([int limit = 100]) async {
       final decoded = jsonDecode(resp.body) as List<dynamic>;
       leaderboard = decoded.map((e) {
         return {
-          'Username': e['username'],
-          'Score': e['score'],
-          'Date': e['date']  // matches backend field
+          'username': e['username'],
+          'score': e['score'],
+          'date': e['date']  // matches backend field
         };
       }).toList();
       notifyListeners();
@@ -1022,7 +1022,7 @@ class LeaderboardPage extends StatelessWidget {
             ]);
           }), label: Text('Submit Score'), icon: Icon(Icons.save)),
           Spacer(),
-          Text("Check out the top 100 scores! Can you beat them?", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+          Text("Check out the top scores! Can you beat them?", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
           Spacer(),
           ElevatedButton.icon(onPressed: () => context.read()<MyGameState>().refreshLeaderboard(), icon: Icon(Icons.refresh), label: Text("Refresh"))
         ],),
