@@ -455,7 +455,7 @@ Future<void> submitScore(String username) async {
     final resp = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'score': score}),
+      body: jsonEncode({"username": username, "score": score}),
     );
 
     if (resp.statusCode != 200) {

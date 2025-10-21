@@ -54,7 +54,7 @@ final Map<String, List<DateTime>> submissionLog = {};
 
 void main() async {
   // open/create database
-  final dbPath = p.join(Directory.current.path, dbFileName);
+  final dbPath = '/home/chaugment/Documents/2048_Server/Radial-2048/leaderboard_backend/bin/leaderboard.db';//p.join(Directory.current.path, dbFileName);
   final db = sqlite3.open(dbPath);
   _ensureSchema(db);
 
