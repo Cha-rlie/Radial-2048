@@ -1051,9 +1051,9 @@ class LeaderboardPage extends StatelessWidget {
                 final score = leaderboard[index];
                 return DataRow(cells: [
                   DataCell(Text((index + 1).toString())), // Rank
-                  DataCell(Text(score['Username'].toString())),
-                  DataCell(Text(score['Score'].toString())),
-                  DataCell(Text(score['Date'].toString())),
+                  DataCell(Text(score['username'].toString())),
+                  DataCell(Text(score['score'].toString())),
+                  DataCell(Text(score['date'].toString())),
                   ]);
                 }),
               ),
