@@ -76282,7 +76282,7 @@ $0(){return A.dc(this.a,!1,t.z).$1$0(t.W).Fg()},
 $S:0}
 A.a_Z.prototype={
 $1(a){var s=null,r=this.a[a]
-return new A.jg(A.c([A.VF(A.bB(B.i.k(a+1),s,s,s,s,s,s)),A.VF(A.bB(J.dv(r.h(0,"Username")),s,s,s,s,s,s)),A.VF(A.bB(J.dv(r.h(0,"Score")),s,s,s,s,s,s)),A.VF(A.bB(J.dv(r.h(0,"Date")),s,s,s,s,s,s))],t.sa))},
+return new A.jg(A.c([A.VF(A.bB(B.i.k(a+1),s,s,s,s,s,s)),A.VF(A.bB(J.dv(r.h(0,"username")),s,s,s,s,s,s)),A.VF(A.bB(J.dv(r.h(0,"score")),s,s,s,s,s,s)),A.VF(A.bB(J.dv(r.h(0,"date")),s,s,s,s,s,s))],t.sa))},
 $S:491}
 A.a8D.prototype={
 $1(a){var s,r,q,p,o=this,n=null,m=o.a,l=m.gaN()
